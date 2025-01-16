@@ -112,12 +112,10 @@ void handleSerial()
             verboseResponse = deserializeState(pDoc->as<JsonObject>());
             //only send response if TX pin is unused for other purposes
             if (verboseResponse && serialCanTX) {
+              byte subJson = deserializeSerialPath(pDoc->as<JsonObject>());
               pDoc->clear();
-              JsonObject state = pDoc->createNestedObject("state");
-              serializeState(state);
-              JsonObject info  = pDoc->createNestedObject("info");
-              serializeInfo(info);
-
+              JsonVariant lDoc = pDoc->to<JsonVariant>();
+              generateJsonContent(lDoc, subJson);
               serializeJson(*pDoc, Serial);
               Serial.println();
             }

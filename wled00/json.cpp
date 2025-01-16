@@ -2,14 +2,15 @@
 
 #include "palettes.h"
 
-#define JSON_PATH_STATE      1
-#define JSON_PATH_INFO       2
-#define JSON_PATH_STATE_INFO 3
-#define JSON_PATH_NODES      4
-#define JSON_PATH_PALETTES   5
-#define JSON_PATH_FXDATA     6
-#define JSON_PATH_NETWORKS   7
-#define JSON_PATH_EFFECTS    8
+#define JSON_PATH_STATE         1
+#define JSON_PATH_INFO          2
+#define JSON_PATH_STATE_INFO    3
+#define JSON_PATH_NODES         4
+#define JSON_PATH_PALETTES      5
+#define JSON_PATH_FXDATA        6
+#define JSON_PATH_NETWORKS      7
+#define JSON_PATH_EFFECTS       8
+#define JSON_PATH_PALLETE_NAMES 9
 
 /*
  * JSON API (De)serialization
@@ -297,7 +298,24 @@ bool deserializeSegment(JsonObject elem, byte it, byte presetId)
 
   return true;
 }
+byte deserializeSerialPath(JsonObject root) {
+  if (!root.containsKey("serialPath")) {
+    return 10;
+  }
+  const String& serialPath = root["serialPath"].as<String>();
+  byte subJson = 0;
+  if      (serialPath.indexOf("state")    == 0) subJson = JSON_PATH_STATE;
+  else if (serialPath.indexOf("info")     == 0) subJson = JSON_PATH_INFO;
+  else if (serialPath.indexOf("si")       == 0) subJson = JSON_PATH_STATE_INFO;
+  else if (serialPath.indexOf(F("nodes")) == 0) subJson = JSON_PATH_NODES;
+  else if (serialPath.indexOf(F("eff"))   == 0) subJson = JSON_PATH_EFFECTS;
+  else if (serialPath.indexOf(F("palx"))  == 0) subJson = JSON_PATH_PALETTES;
+  else if (serialPath.indexOf(F("fxda"))  == 0) subJson = JSON_PATH_FXDATA;
+  else if (serialPath.indexOf(F("net"))   == 0) subJson = JSON_PATH_NETWORKS;
+  else if (serialPath.indexOf("pal")      == 0) subJson = JSON_PATH_PALLETE_NAMES;
 
+  return subJson;
+}
 // deserializes WLED state
 // presetId is non-0 if called from handlePreset()
 bool deserializeState(JsonObject root, byte callMode, byte presetId)
@@ -948,6 +966,10 @@ void serializeNetworks(JsonObject root)
   }
 }
 
+void serializePalleteNames(JsonObject root) {
+
+}
+
 void serializeNodes(JsonObject root)
 {
   JsonArray nodes = root.createNestedArray("nodes");
@@ -1021,6 +1043,47 @@ class LockedJsonResponse: public AsyncJsonResponse {
   virtual ~LockedJsonResponse() { if (_holding_lock) releaseJSONBufferLock(); };
 };
 
+void generateJsonContent(JsonVariant& lDoc, byte subJson, AsyncWebServerRequest* request)
+{
+  switch (subJson)
+  {
+    case JSON_PATH_STATE:
+      serializeState(lDoc); break;
+    case JSON_PATH_INFO:
+      serializeInfo(lDoc); break;
+    case JSON_PATH_NODES:
+      serializeNodes(lDoc); break;
+    case JSON_PATH_PALETTES:
+      if (request != nullptr) {
+        int page = request->hasParam(F("page")) ? request->getParam(F("page"))->value().toInt() : 0;
+        serializePalettes(lDoc, page);
+      } else {
+        serializePalettes(lDoc, 0); // Default page if no request is provided
+      }
+    case JSON_PATH_EFFECTS:
+      serializeModeNames(lDoc); break;
+    case JSON_PATH_FXDATA:
+      serializeModeData(lDoc); break;
+    case JSON_PATH_NETWORKS:
+      serializeNetworks(lDoc); break;
+    case JSON_PATH_PALLETE_NAMES:
+      lDoc.set(serialized((const __FlashStringHelper*)JSON_palette_names)); break;
+    default: //all
+      JsonObject state = lDoc.createNestedObject("state");
+      serializeState(state);
+      JsonObject info = lDoc.createNestedObject("info");
+      serializeInfo(info);
+      if (subJson != JSON_PATH_STATE_INFO)
+      {
+        JsonArray effects = lDoc.createNestedArray(F("effects"));
+        serializeModeNames(effects); // remove WLED-SR extensions from effect names
+        lDoc[F("palettes")] = serialized((const __FlashStringHelper*)JSON_palette_names);
+      }
+      //lDoc["m"] = lDoc.memoryUsage(); // JSON buffer usage, for remote debugging
+  }
+}
+
+
 void serveJson(AsyncWebServerRequest* request)
 {
   byte subJson = 0;
@@ -1033,16 +1096,18 @@ void serveJson(AsyncWebServerRequest* request)
   else if (url.indexOf(F("palx"))  > 0) subJson = JSON_PATH_PALETTES;
   else if (url.indexOf(F("fxda"))  > 0) subJson = JSON_PATH_FXDATA;
   else if (url.indexOf(F("net"))   > 0) subJson = JSON_PATH_NETWORKS;
+  else if (url.indexOf("pal") > 0) subJson = JSON_PATH_PALLETE_NAMES;
+  // {
+  //   request->send_P(200, FPSTR(CONTENT_TYPE_JSON), JSON_palette_names);
+  //   return;
+  // }
   #ifdef WLED_ENABLE_JSONLIVE
   else if (url.indexOf("live")     > 0) {
     serveLiveLeds(request);
     return;
   }
   #endif
-  else if (url.indexOf("pal") > 0) {
-    request->send_P(200, FPSTR(CONTENT_TYPE_JSON), JSON_palette_names);
-    return;
-  }
+  
   else if (url.indexOf(F("cfg")) > 0 && handleFileRead(request, F("/cfg.json"))) {
     return;
   }
@@ -1061,35 +1126,7 @@ void serveJson(AsyncWebServerRequest* request)
 
   JsonVariant lDoc = response->getRoot();
 
-  switch (subJson)
-  {
-    case JSON_PATH_STATE:
-      serializeState(lDoc); break;
-    case JSON_PATH_INFO:
-      serializeInfo(lDoc); break;
-    case JSON_PATH_NODES:
-      serializeNodes(lDoc); break;
-    case JSON_PATH_PALETTES:
-      serializePalettes(lDoc, request->hasParam(F("page")) ? request->getParam(F("page"))->value().toInt() : 0); break;
-    case JSON_PATH_EFFECTS:
-      serializeModeNames(lDoc); break;
-    case JSON_PATH_FXDATA:
-      serializeModeData(lDoc); break;
-    case JSON_PATH_NETWORKS:
-      serializeNetworks(lDoc); break;
-    default: //all
-      JsonObject state = lDoc.createNestedObject("state");
-      serializeState(state);
-      JsonObject info = lDoc.createNestedObject("info");
-      serializeInfo(info);
-      if (subJson != JSON_PATH_STATE_INFO)
-      {
-        JsonArray effects = lDoc.createNestedArray(F("effects"));
-        serializeModeNames(effects); // remove WLED-SR extensions from effect names
-        lDoc[F("palettes")] = serialized((const __FlashStringHelper*)JSON_palette_names);
-      }
-      //lDoc["m"] = lDoc.memoryUsage(); // JSON buffer usage, for remote debugging
-  }
+  generateJsonContent(lDoc, subJson, request);
 
   DEBUG_PRINTF_P(PSTR("JSON buffer size: %u for request: %d\n"), lDoc.memoryUsage(), subJson);
 

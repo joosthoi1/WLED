@@ -241,6 +241,7 @@ void handleIR();
 #include "src/dependencies/json/AsyncJson-v6.h"
 #include "FX.h"
 
+byte deserializeSerialPath(JsonObject root);
 bool deserializeSegment(JsonObject elem, byte it, byte presetId = 0);
 bool deserializeState(JsonObject root, byte callMode = CALL_MODE_DIRECT_CHANGE, byte presetId = 0);
 void serializeSegment(JsonObject& root, Segment& seg, byte id, bool forPreset = false, bool segmentBounds = true);
@@ -248,6 +249,7 @@ void serializeState(JsonObject root, bool forPreset = false, bool includeBri = t
 void serializeInfo(JsonObject root);
 void serializeModeNames(JsonArray root);
 void serializeModeData(JsonArray root);
+void generateJsonContent(JsonVariant& lDoc, byte subJson, AsyncWebServerRequest* request = nullptr);
 void serveJson(AsyncWebServerRequest* request);
 #ifdef WLED_ENABLE_JSONLIVE
 bool serveLiveLeds(AsyncWebServerRequest* request, uint32_t wsClient = 0);
