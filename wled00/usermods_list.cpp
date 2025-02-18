@@ -10,7 +10,9 @@
  * \/ \/ \/
  */
 //#include "../usermods/EXAMPLE_v2/usermod_v2_example.h"
-
+#ifdef USERMOD_LCD_CONTROL
+  #include "../usermods/LCD_Control_v2/usermod_LCD_Control.h"
+#endif
 #ifdef USERMOD_BATTERY
   #include "../usermods/Battery/usermod_v2_Battery.h"
 #endif
@@ -255,7 +257,9 @@ void registerUsermods()
    * \/ \/ \/
    */
   //UsermodManager::add(new MyExampleUsermod());
-
+  #ifdef USERMOD_LCD_CONTROL
+  UsermodManager::add(new LCDControlUsermod());
+  #endif
   #ifdef USERMOD_BATTERY
   UsermodManager::add(new UsermodBattery());
   #endif
